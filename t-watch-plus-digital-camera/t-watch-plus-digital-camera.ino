@@ -1,24 +1,25 @@
 #include <esp_camera.h>
 #include <SD.h>
-#include <rom/tjpgd.h>
-#include <Arduino_HWSPI.h>
-#include <Arduino_Display.h> // Various display driver
+#include <Arduino_GFX_Library.h>
 
 #define CAMERA_MODEL_TTGO_T_CAMERA // check camera_pins.h for other camera model
 #include "camera_pins.h"
-#include "tjpgdec.h"
 
-#define PREVIEW_QUALITY 63 // 1-63, 1 is the best
-#define SNAP_QUALITY 6 // 1-63, 1 is the best
-#define SNAP_SIZE FRAMESIZE_UXGA
+#define PREVIEW_QUALITY 6 // 1-63, 1 is the best
+#define PREVIEW_SIZE FRAMESIZE_HQVGA
+#define SNAP_QUALITY 4 // 1-63, 1 is the best
+#define SNAP_SIZE FRAMESIZE_XGA
 
-#define TFT_BL 2
+// #define TFT_BL 2
 #define SCK 21
 #define MOSI 19
 #define MISO 22
 #define SS 0
-Arduino_HWSPI *bus = new Arduino_HWSPI(15 /* DC */, 12 /* CS */, SCK, MOSI, MISO);
-Arduino_ST7789 *gfx = new Arduino_ST7789(bus, -1 /* RST */, 2 /* rotation */, true /* IPS */, 240 /* width */, 240 /* height */, 0 /* col offset 1 */, 80 /* row offset 1 */);
+Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 12 /* CS */, SCK, MOSI, MISO);
+Arduino_TFT *gfx = new Arduino_ST7789(bus, -1 /* RST */, 3 /* rotation */, true /* IPS */, 240 /* width */, 240 /* height */, 0 /* col offset 1 */, 80 /* row offset 1 */);
+
+#include "src/JpegDec.h"
+static JpegDec jpegDec;
 
 char tmpStr[256];
 char nextFilename[31];
@@ -31,6 +32,8 @@ void setup()
 {
   Serial.begin(115200);
   // Serial.setDebugOutput(true);
+
+  pinMode(2, INPUT_PULLUP);
 
   gfx->begin();
   gfx->fillScreen(BLACK);
@@ -55,7 +58,7 @@ void setup()
         findNextFileIdxTask,   /* Task function. */
         "FindNextFileIdxTask", /* String with name of task. */
         10000,                 /* Stack size in bytes. */
-        work,                  /* Parameter passed as input of the task */
+        NULL,                  /* Parameter passed as input of the task */
         1,                     /* Priority of the task. */
         NULL);                 /* Task handle. */
   }
@@ -69,23 +72,17 @@ void setup()
 
   //drop down frame size for higher initial frame rate
   s = esp_camera_sensor_get();
-  s->set_brightness(s, 2);
-  s->set_contrast(s, 2);
-  s->set_saturation(s, 2);
-  s->set_sharpness(s, 2);
+  s->set_brightness(s, 1);
+  s->set_contrast(s, 1);
+  s->set_saturation(s, 1);
+  s->set_sharpness(s, 1);
   s->set_aec2(s, true);
   s->set_denoise(s, true);
   s->set_lenc(s, true);
   // s->set_hmirror(s, true);
-  // s->set_vflip(s, true);
+  s->set_vflip(s, true);
   s->set_quality(s, PREVIEW_QUALITY);
-
-  work = (char *)heap_caps_malloc(WORK_BUF_SIZE, MALLOC_CAP_DMA);
-  dev.linbuf_idx = 0;
-  dev.x = 0;
-  dev.y = 0;
-  dev.linbuf[0] = (color_t *)heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE * 3, MALLOC_CAP_DMA);
-  dev.linbuf[1] = (color_t *)heap_caps_malloc(JPG_IMAGE_LINE_BUF_SIZE * 3, MALLOC_CAP_DMA);
+  s->set_framesize(s, PREVIEW_SIZE);
 }
 
 esp_err_t cam_init()
@@ -109,7 +106,7 @@ esp_err_t cam_init()
   config.pin_sscb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000;
+  config.xclk_freq_hz = 10000000;
   config.pixel_format = PIXFORMAT_JPEG;
   // init with high specs to pre-allocate larger buffers
   config.frame_size = SNAP_SIZE;
@@ -229,18 +226,6 @@ void findNextFileIdx()
   }
 }
 
-unsigned int tjd_output(
-    JDEC *jd,     // Decompression object of current session
-    void *bitmap, // Bitmap data to be output
-    JRECT *rect   // Rectangular region to output
-)
-{
-  // Serial.printf("%d, %d, %d, %d\n", rect->top, rect->left, rect->bottom, rect->right);
-  gfx->draw24bitRGBBitmap(rect->left + 20, rect->top + 20, bitmap, rect->right - rect->left + 1, rect->bottom - rect->top + 1);
-
-  return 1; // Continue to decompression
-}
-
 void saveFile()
 {
   fb = esp_camera_fb_get();
@@ -266,6 +251,10 @@ void saveFile()
     esp_camera_fb_return(fb);
     fb = NULL;
     file.close();
+
+    file = SD.open(nextFilename, FILE_READ);
+    jpegDec.prepare(jpegDec.file_reader, &file);
+    jpegDec.decode(JPG_SCALE_4X, gfx_writer1, gfx);
   }
 }
 
@@ -274,46 +263,43 @@ void snap()
   // s->set_hmirror(s, false);
   // s->set_vflip(s, false);
   s->set_quality(s, SNAP_QUALITY);
+  s->set_framesize(s, SNAP_SIZE);
 
   fb = esp_camera_fb_get();
   esp_camera_fb_return(fb);
   fb = NULL;
 
-  saveFile();
-  findNextFileIdx();
-  saveFile();
-  findNextFileIdx();
   saveFile();
   findNextFileIdx();
 
   // s->set_hmirror(s, true);
   // s->set_vflip(s, true);
   s->set_quality(s, PREVIEW_QUALITY);
+  s->set_framesize(s, PREVIEW_SIZE);
 
   fb = esp_camera_fb_get();
   esp_camera_fb_return(fb);
   fb = NULL;
 }
 
-void enterSleep()
-{
-  gfx->end();
-  esp_deep_sleep_start();
-}
-
 void loop()
 {
-  if ((millis() > 5000) && (millis() < 6000))
+  if (digitalRead(2) == LOW)
   {
     Serial.println(F("Start snap!"));
 
     gfx->fillScreen(BLACK);
 
     snap();
-
-    // delay(5000);
-    // Serial.println("Enter deep sleep...");
-    // enterSleep();
+    while(digitalRead(2) != LOW){
+      // wait until press snap again
+      delay(100);
+    }
+    while(digitalRead(2) == LOW){
+      // wait release snap button
+      delay(100);
+    }
+    gfx->fillScreen(BLACK);
   }
   else
   {
@@ -324,11 +310,30 @@ void loop()
     }
     else
     {
-      decodeJpegBuff(fb->buf, fb->len, 3);
+      jpegDec.prepare(jpegDec.buff_reader, fb->buf);
+      jpegDec.decode(JPG_SCALE_NONE, gfx_writer1, gfx);
       esp_camera_fb_return(fb);
       fb = NULL;
     }
   }
 
   i++;
+}
+
+static bool gfx_writer1(JpegDec *jpegDec, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t *data)
+{
+  if (data)
+  {
+    // Serial.printf("%d, %d, %d, %d\n", x, y, w, h);
+    if (y > gfx->height())
+    {
+      return false;
+    }
+    if (x > gfx->width())
+    {
+      return true;
+    }
+    gfx->draw24bitRGBBitmap(x, y, data, w, h);
+  }
+  return true; // Continue to decompression
 }
