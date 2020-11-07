@@ -16,7 +16,7 @@
 #define MISO 22
 #define SS 0
 Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 12 /* CS */, SCK, MOSI, MISO);
-Arduino_TFT *gfx = new Arduino_ST7789(bus, -1 /* RST */, 3 /* rotation */, true /* IPS */, 240 /* width */, 256 /* height */, 0 /* col offset 1 */, 64 /* row offset 1 */);
+Arduino_TFT *gfx = new Arduino_ST7789(bus, -1 /* RST */, 3 /* rotation */, true /* IPS */, 240 /* width */, 240 /* height */, 0 /* col offset 1 */, 80 /* row offset 1 */);
 
 #include "JPEGDEC.h"
 JPEGDEC jpeg;
@@ -254,6 +254,7 @@ void saveFile()
 
     uint32_t start_ms = millis();
     jpeg.open(nextFilename, JPGOpenFile, JPGCloseFile, JPGReadFile, JPGSeekFile, drawMCU);
+    jpeg.setMaxOutputSize(60);
     jpeg.decode(0, 0, JPEG_SCALE_QUARTER);
     jpeg.close();
     Serial.printf("File decode used: %d\n", millis() - start_ms);
@@ -314,11 +315,11 @@ void loop()
     }
     else
     {
-      uint32_t start_ms = millis();
+      // uint32_t start_ms = millis();
       jpeg.openRAM(fb->buf, fb->len, drawMCU);
       jpeg.decode(0, 0, 0);
       jpeg.close();
-      Serial.printf("Liveview decode used: %d\n", millis() - start_ms);
+      // Serial.printf("Liveview decode used: %d\n", millis() - start_ms);
       esp_camera_fb_return(fb);
       fb = NULL;
     }
@@ -330,7 +331,7 @@ void loop()
 // pixel drawing callback
 void drawMCU(JPEGDRAW *pDraw)
 {
-  //  Serial.printf("Draw pos = %d,%d. size = %d x %d\n", pDraw->x, pDraw->y, pDraw->iWidth, pDraw->iHeight);
+  // Serial.printf("Draw pos = %d,%d. size = %d x %d\n", pDraw->x, pDraw->y, pDraw->iWidth, pDraw->iHeight);
   gfx->draw16bitRGBBitmap(pDraw->x, pDraw->y, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
 } /* drawMCU() */
 
