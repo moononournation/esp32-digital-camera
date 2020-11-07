@@ -248,13 +248,16 @@ void saveFile()
       Serial.println(F("Write failed!"));
     }
 
+    file.close();
     esp_camera_fb_return(fb);
     fb = NULL;
-    file.close();
 
+    uint32_t start_ms = millis();
     file = SD.open(nextFilename, FILE_READ);
     jpegDec.prepare(jpegDec.file_reader, &file);
     jpegDec.decode(JPG_SCALE_4X, gfx_writer1, gfx);
+    file.close();
+    Serial.printf("File decode used: %d\n", millis() - start_ms);
   }
 }
 
@@ -310,8 +313,10 @@ void loop()
     }
     else
     {
+      uint32_t start_ms = millis();
       jpegDec.prepare(jpegDec.buff_reader, fb->buf);
       jpegDec.decode(JPG_SCALE_NONE, gfx_writer1, gfx);
+      Serial.printf("Liveview decode used: %d\n", millis() - start_ms);
       esp_camera_fb_return(fb);
       fb = NULL;
     }

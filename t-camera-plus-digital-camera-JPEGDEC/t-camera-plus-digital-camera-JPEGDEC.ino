@@ -16,7 +16,7 @@
 #define MISO 22
 #define SS 0
 Arduino_DataBus *bus = new Arduino_HWSPI(15 /* DC */, 12 /* CS */, SCK, MOSI, MISO);
-Arduino_TFT *gfx = new Arduino_ST7789(bus, -1 /* RST */, 3 /* rotation */, true /* IPS */, 240 /* width */, 240 /* height */, 0 /* col offset 1 */, 80 /* row offset 1 */);
+Arduino_TFT *gfx = new Arduino_ST7789(bus, -1 /* RST */, 3 /* rotation */, true /* IPS */, 240 /* width */, 256 /* height */, 0 /* col offset 1 */, 64 /* row offset 1 */);
 
 #include "JPEGDEC.h"
 JPEGDEC jpeg;
@@ -249,14 +249,14 @@ void saveFile()
     }
 
     file.close();
-
-    // jpeg.open(nextFilename, JPGOpenFile, JPGCloseFile, JPGReadFile, JPGSeekFile, drawMCU);
-    jpeg.openRAM(fb->buf, fb->len, drawMCU);
-    jpeg.decode(0, 0, JPEG_SCALE_QUARTER);
-    jpeg.close();
-
     esp_camera_fb_return(fb);
     fb = NULL;
+
+    uint32_t start_ms = millis();
+    jpeg.open(nextFilename, JPGOpenFile, JPGCloseFile, JPGReadFile, JPGSeekFile, drawMCU);
+    jpeg.decode(0, 0, JPEG_SCALE_QUARTER);
+    jpeg.close();
+    Serial.printf("File decode used: %d\n", millis() - start_ms);
   }
 }
 
@@ -314,9 +314,11 @@ void loop()
     }
     else
     {
+      uint32_t start_ms = millis();
       jpeg.openRAM(fb->buf, fb->len, drawMCU);
       jpeg.decode(0, 0, 0);
       jpeg.close();
+      Serial.printf("Liveview decode used: %d\n", millis() - start_ms);
       esp_camera_fb_return(fb);
       fb = NULL;
     }
@@ -337,37 +339,41 @@ void *JPGOpenFile(const char *szFilename, int32_t *pFileSize)
 {
   jpgFile = SD.open(szFilename, FILE_READ);
   *pFileSize = jpgFile.size();
-  Serial.printf("JPGOpenFile, szFilename: %s, pFileSize: %d\n", szFilename, *pFileSize);
+  // Serial.printf("JPGOpenFile, szFilename: %s, pFileSize: %d\n", szFilename, *pFileSize);
   return &jpgFile;
 }
 
 void JPGCloseFile(void *pHandle)
 {
-  Serial.println("JPGCloseFile");
+  // Serial.println("JPGCloseFile");
   File *f = static_cast<File *>(pHandle);
   if (f != NULL)
+  {
     f->close();
+  }
 }
 
 int32_t JPGReadFile(JPEGFILE *pFile, uint8_t *pBuf, int32_t iLen)
 {
-  Serial.printf("JPGReadFile, iLen: %d\n", iLen);
+  // Serial.printf("JPGReadFile, iLen: %d\n", iLen);
   File *f = static_cast<File *>(pFile->fHandle);
   if (f != NULL)
   {
     size_t r = f->read(pBuf, iLen);
-    Serial.printf("JPGReadFile, iLen: %d, r: %d\n", iLen, r);
+    // Serial.printf("JPGReadFile, iLen: %d, r: %d\n", iLen, r);
     return r;
   }
+  return 0;
 }
 
 int32_t JPGSeekFile(JPEGFILE *pFile, int32_t iPosition)
 {
-  Serial.printf("JPGSeekFile, pFile->iPos: %d, iPosition: %d\n", pFile->iPos, iPosition);
+  // Serial.printf("JPGSeekFile, pFile->iPos: %d, iPosition: %d\n", pFile->iPos, iPosition);
   File *f = static_cast<File *>(pFile->fHandle);
   if (f != NULL)
   {
     f->seek(iPosition);
     return iPosition;
   }
+  return 0;
 }
