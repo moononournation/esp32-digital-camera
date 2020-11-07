@@ -332,12 +332,13 @@ void drawMCU(JPEGDRAW *pDraw)
   gfx->draw16bitRGBBitmap(pDraw->x, pDraw->y, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
 } /* drawMCU() */
 
+static File jpgFile;
 void *JPGOpenFile(const char *szFilename, int32_t *pFileSize)
 {
-  File f = SD.open(szFilename, FILE_READ);
-  *pFileSize = f.size();
+  jpgFile = SD.open(szFilename, FILE_READ);
+  *pFileSize = jpgFile.size();
   Serial.printf("JPGOpenFile, szFilename: %s, pFileSize: %d\n", szFilename, *pFileSize);
-  return &f;
+  return &jpgFile;
 }
 
 void JPGCloseFile(void *pHandle)
