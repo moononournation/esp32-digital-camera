@@ -1,8 +1,7 @@
 #include <esp_camera.h>
 #include <SD.h>
 #include <rom/tjpgd.h>
-#include <Arduino_HWSPI.h>
-#include <Arduino_Display.h> // Various display driver
+#include <Arduino_GFX_Library.h>
 
 #define CAMERA_MODEL_TTGO_T_CAMERA // check camera_pins.h for other camera model
 #include "camera_pins.h"

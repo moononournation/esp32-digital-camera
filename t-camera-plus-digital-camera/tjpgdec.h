@@ -4,7 +4,7 @@
 #include <FS.h>
 #include <rom/tjpgd.h>
 
-#include "Arduino_GFX.h"
+#include <Arduino_GFX_Library.h>
 
 // Buffer is created during jpeg decode for sending data
 // Total size of the buffer is  2 * (JPG_IMAGE_LINE_BUF_SIZE * 3)
